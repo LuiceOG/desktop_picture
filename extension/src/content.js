@@ -410,7 +410,7 @@
     grid.className = 'grid';
 
     panel.append(search, status, grid);
-    root.append(panel);
+    root.append(style, panel);
 
     input.addEventListener('input', () => {
       picker.showingFavorites = false;
