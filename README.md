@@ -108,6 +108,7 @@ The picker opens with Tenor's featured GIFs. To find another one:
 | "YouTube did not accept this GIF comment" | YouTube turned the comment down without giving a reason. Try another GIF or another video. |
 | Search finds nothing in Firefox | Open `about:addons`, select Desktop GIFs, and check under **Permissions** that access to `tenor.com` is on. |
 | "Manifest file is missing or unreadable" | The wrong folder was chosen. Choose the folder that has `manifest.json` directly inside it. |
+| The ZIP file lacks a root folder and cannot be imported on ChromeOS | Create a new folder on your device. Drag `manifest.json`, `src`, and `icons` into it, then import that new folder. |
 | Chrome, Edge or Brave lists the error `'background.scripts' requires manifest version of 2 or lower` | The extension is installed and works. The message appears when the `extension` folder is loaded from the source; that key is there for Firefox. `desktop-gifs-chromium.zip` does not have it. |
 | Clicking **GIF** does nothing in Firefox | Update to 0.1.1 or newer. |
 
