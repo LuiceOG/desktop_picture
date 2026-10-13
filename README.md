@@ -33,7 +33,7 @@ It needs Chrome 111 or newer. Other Chromium browsers should work but are untest
 3. Go to the "this firefox" tab, and add the zip as a temporary extension.
 
 
-**WARNING: You will have to repeat this step everytime you open and close Firefox, and the GIF icon doesn't show up for some reason, it's at the right of the emoji button, just hovering over it should make you see it)
+**WARNING: You will have to repeat this step everytime you open and close Firefox, and the GIF icon doesn't show up for some reason, it's at the right of the emoji button, just try hovering over**
 
 ## Use
 
