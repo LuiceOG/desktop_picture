@@ -33,8 +33,6 @@ It needs Chrome 111 or newer. Other Chromium browsers should work but are untest
 5. Reload any YouTube tabs that were already open.
 
 
-**WARNING: You will have to repeat this step everytime you open and close Firefox, and the GIF icon doesn't show up for some reason, it's at the right of the emoji button, just try hovering over**
-
 ## Use
 
 1. Sign in to YouTube and open a video or a Short.
