@@ -24,13 +24,13 @@ Desktop GIFs is not on the Chrome Web Store. Load it from this folder:
 
 It needs Chrome 111 or newer. Other Chromium browsers should work but are untested. 
 
-## Install (FIREFOX)
+## Install (EDGE)
 
-1. Download the zip. (DON'T EXTRACT IT)
-
-2. Open firefox and go to about:debugging
-
-3. Go to the "this firefox" tab, and add the zip as a temporary extension.
+1. Download [the zip](https://github.com/lompendans/desktop_gifs_edge/releases/download/release/desktop_gifs-main-edgefix.zip) and extract it.
+2. Open edge and go to `edge://extensions`
+3. Enable developer mode
+4. Click load unpacked and choose the extension folder.
+5. Reload any YouTube tabs that were already open.
 
 
 **WARNING: You will have to repeat this step everytime you open and close Firefox, and the GIF icon doesn't show up for some reason, it's at the right of the emoji button, just try hovering over**
