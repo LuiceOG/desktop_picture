@@ -1,3 +1,4 @@
+```javascript
 // Isolated-world content script: adds a GIF button to YouTube's comment boxes,
 // shows the picker, and hands the chosen GIF to the page-world hook (main.js)
 // by submitting a one-time marker through YouTube's own comment box.
@@ -15,77 +16,251 @@
   const ARM_TIMEOUT_MS = 1500;
   const AUTO_SUBMIT_GRACE_MS = 4000;
   const RESULT_TIMEOUT_MS = 20000;
+  const FAVORITES_KEY = 'gcfy-favorite-gifs-v1';
 
   const PICKER_CSS = `
-    :host { all: initial; position: fixed; z-index: 2147483647; }
+    :host {
+      all: initial;
+      position: fixed;
+      z-index: 2147483647;
+    }
+
     .panel {
-      --bg: #fff; --fg: #0f0f0f; --muted: #606060; --line: rgba(0,0,0,.12); --field: rgba(0,0,0,.05); --accent: #065fd4; --err: #c00;
-      --thumb: rgba(0,0,0,.25); --thumb-hover: rgba(0,0,0,.45);
-      box-sizing: border-box; display: flex; flex-direction: column;
-      width: ${PICKER_W}px; background: var(--bg); color: var(--fg);
-      border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+      --bg: #fff;
+      --fg: #0f0f0f;
+      --muted: #606060;
+      --line: rgba(0,0,0,.12);
+      --field: rgba(0,0,0,.05);
+      --accent: #065fd4;
+      --err: #c00;
+      --thumb: rgba(0,0,0,.25);
+      --thumb-hover: rgba(0,0,0,.45);
+
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      width: ${PICKER_W}px;
+      background: var(--bg);
+      color: var(--fg);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
       box-shadow: 0 8px 28px rgba(0,0,0,.35);
       font: 13px/1.4 Roboto, Arial, sans-serif;
     }
+
     .panel[data-dark] {
-      --bg: #212121; --fg: #f1f1f1; --muted: #aaa; --line: rgba(255,255,255,.14); --field: rgba(255,255,255,.08); --accent: #3ea6ff; --err: #ff7b7b;
-      --thumb: rgba(255,255,255,.25); --thumb-hover: rgba(255,255,255,.45);
+      --bg: #212121;
+      --fg: #f1f1f1;
+      --muted: #aaa;
+      --line: rgba(255,255,255,.14);
+      --field: rgba(255,255,255,.08);
+      --accent: #3ea6ff;
+      --err: #ff7b7b;
+      --thumb: rgba(255,255,255,.25);
+      --thumb-hover: rgba(255,255,255,.45);
     }
-    .search { flex: none; padding: 8px; border-bottom: 1px solid var(--line); }
+
+    .search {
+      flex: none;
+      padding: 8px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .search input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .favorites-tab {
+      flex: none;
+      height: 34px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 17px;
+      background: var(--field);
+      color: var(--fg);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .favorites-tab[aria-pressed="true"] {
+      background: var(--accent);
+      color: #fff;
+    }
+
     input {
-      box-sizing: border-box; width: 100%; height: 34px; padding: 0 12px;
-      border: 1px solid transparent; border-radius: 17px; outline: none;
-      background: var(--field); color: var(--fg); font: inherit;
+      box-sizing: border-box;
+      width: 100%;
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-radius: 17px;
+      outline: none;
+      background: var(--field);
+      color: var(--fg);
+      font: inherit;
     }
-    input:focus { border-color: var(--accent); }
-    input::placeholder { color: var(--muted); }
-    .status { flex: none; padding: 6px 12px 0; color: var(--muted); }
-    .status:empty { display: none; }
-    .status[data-kind="error"] { color: var(--err); }
+
+    input:focus {
+      border-color: var(--accent);
+    }
+
+    input::placeholder {
+      color: var(--muted);
+    }
+
+    .status {
+      flex: none;
+      padding: 6px 12px 0;
+      color: var(--muted);
+    }
+
+    .status:empty {
+      display: none;
+    }
+
+    .status[data-kind="error"] {
+      color: var(--err);
+    }
+
     .grid {
-      flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 8px 2px 8px 8px;
-      display: flex; align-items: flex-start; gap: 6px;
+      flex: 1;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 8px 2px 8px 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
       scrollbar-gutter: stable;
     }
-    /* Slim rounded scrollbar: a 6px thumb inside a 12px transparent track. */
-    .grid::-webkit-scrollbar { width: 12px; }
-    .grid::-webkit-scrollbar-track { background: transparent; }
+
+    .grid::-webkit-scrollbar {
+      width: 12px;
+    }
+
+    .grid::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
     .grid::-webkit-scrollbar-thumb {
-      border: 3px solid transparent; border-radius: 6px;
-      background: var(--thumb); background-clip: content-box;
+      border: 3px solid transparent;
+      border-radius: 6px;
+      background: var(--thumb);
+      background-clip: content-box;
     }
-    .grid::-webkit-scrollbar-thumb:hover { background: var(--thumb-hover); background-clip: content-box; }
+
+    .grid::-webkit-scrollbar-thumb:hover {
+      background: var(--thumb-hover);
+      background-clip: content-box;
+    }
+
     @supports not selector(::-webkit-scrollbar) {
-      .grid { scrollbar-width: thin; scrollbar-color: var(--thumb) transparent; padding-right: 8px; }
+      .grid {
+        scrollbar-width: thin;
+        scrollbar-color: var(--thumb) transparent;
+        padding-right: 8px;
+      }
     }
-    .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+
+    .col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
     .tile {
-      display: block; width: 100%; margin: 0; padding: 0; border: 0; border-radius: 8px;
-      overflow: hidden; background: var(--field); cursor: pointer;
+      position: relative;
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--field);
+      cursor: pointer;
     }
-    .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .tile:hover img { opacity: .82; }
-    .tile img { display: block; width: 100%; height: auto; }
-    .panel[data-busy] .tile { pointer-events: none; opacity: .45; }
+
+    .tile:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    .tile:hover img {
+      opacity: .82;
+    }
+
+    .tile img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .favorite-toggle {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      z-index: 2;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(0,0,0,.68);
+      color: #fff;
+      font: 22px/1 Arial, sans-serif;
+      cursor: pointer;
+      opacity: 0;
+      transform: scale(.92);
+      transition: opacity .12s, transform .12s;
+    }
+
+    .tile:hover .favorite-toggle,
+    .favorite-toggle:focus-visible,
+    .favorite-toggle[aria-pressed="true"] {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .favorite-toggle[aria-pressed="true"] {
+      color: #ffd45c;
+    }
+
+    .panel[data-busy] .tile {
+      pointer-events: none;
+      opacity: .45;
+    }
   `;
 
   // ---------------------------------------------------------------- page hook
 
-  const fromMain = new Map(); // nonce -> callback(msg)
+  const fromMain = new Map();
 
   window.addEventListener('message', (e) => {
     if (e.source !== window || e.origin !== location.origin) return;
+
     const msg = e.data;
     if (!msg || msg.gcfy !== 'to-content' || typeof msg.nonce !== 'string') return;
-    const cb = fromMain.get(msg.nonce);
-    if (cb) cb(msg);
+
+    const callback = fromMain.get(msg.nonce);
+    if (callback) callback(msg);
   });
 
-  const toMain = (msg) => window.postMessage({ gcfy: 'to-main', ...msg }, location.origin);
+  const toMain = (msg) =>
+    window.postMessage({ gcfy: 'to-main', ...msg }, location.origin);
 
   function newNonce() {
     const bytes = crypto.getRandomValues(new Uint8Array(8));
-    return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+    return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   }
 
   // ------------------------------------------------------------- GIF buttons
@@ -93,8 +268,10 @@
   function addButton(box) {
     if (box.querySelector('.gcfy-btn')) return;
     if (!box.closest(BOX_SCOPE) || box.closest(POST_DIALOG)) return;
+
     const footer = box.querySelector('#footer');
     if (!footer) return;
+
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'gcfy-btn';
@@ -102,38 +279,130 @@
     btn.setAttribute('aria-label', 'Add a GIF');
     btn.setAttribute('aria-haspopup', 'dialog');
     btn.setAttribute('aria-expanded', 'false');
+
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+
       if (picker.open && picker.anchor === btn) closePicker();
       else openPicker(btn, box);
     });
+
     const emoji = footer.querySelector('#emoji-button');
+
     if (emoji && emoji.parentElement === footer) emoji.after(btn);
     else footer.prepend(btn);
   }
 
   let scanQueued = false;
+
   function scan() {
     scanQueued = false;
-    for (const box of document.querySelectorAll('ytd-commentbox')) addButton(box);
+
+    for (const box of document.querySelectorAll('ytd-commentbox')) {
+      addButton(box);
+    }
   }
+
   new MutationObserver(() => {
     if (scanQueued) return;
+
     scanQueued = true;
     requestAnimationFrame(scan);
-  }).observe(document.documentElement, { childList: true, subtree: true });
-  // Comment boxes that are already there when this file is injected late.
+  }).observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
+
+  // Comment boxes that already exist when this file is injected late.
   scan();
 
-  // ------------------------------------------------------------------ picker
+  // ---------------------------------------------------------------- favorites
 
-  const picker = { open: false, busy: false, host: null, anchor: null, box: null, els: null, seq: 0, timer: 0, gifs: [], nonce: null };
+  function loadFavorites() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+
+      return Array.isArray(saved)
+        ? saved.filter((gif) =>
+            gif &&
+            typeof gif.id === 'string' &&
+            typeof gif.preview === 'string'
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  const picker = {
+    open: false,
+    busy: false,
+    host: null,
+    anchor: null,
+    box: null,
+    els: null,
+    seq: 0,
+    timer: 0,
+    gifs: [],
+    favorites: loadFavorites(),
+    showingFavorites: false
+  };
+
+  function saveFavorites() {
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(picker.favorites));
+    } catch {
+      setStatus('Could not save favorites in this browser.', 'error');
+    }
+  }
+
+  function isFavorite(gif) {
+    return picker.favorites.some(
+      (favorite) => favorite.id === String(gif.id)
+    );
+  }
+
+  function toggleFavorite(gif) {
+    if (!gif) return;
+
+    const id = String(gif.id);
+
+    if (isFavorite(gif)) {
+      picker.favorites = picker.favorites.filter(
+        (favorite) => favorite.id !== id
+      );
+    } else {
+      picker.favorites.unshift({
+        id,
+        title: String(gif.title || 'GIF'),
+        preview: String(gif.preview),
+        width: Number(gif.width) || 1,
+        height: Number(gif.height) || 1
+      });
+    }
+
+    saveFavorites();
+
+    if (picker.showingFavorites) {
+      render(picker.favorites);
+      setStatus(
+        picker.favorites.length
+          ? ''
+          : 'No favorite GIFs yet. Hover over a GIF and select the star.'
+      );
+    } else {
+      render(picker.gifs);
+    }
+  }
+
+  // ------------------------------------------------------------------ picker
 
   function buildPicker() {
     const host = document.createElement('div');
     const root = host.attachShadow({ mode: 'open' });
     const sheet = new CSSStyleSheet();
+
     sheet.replaceSync(PICKER_CSS);
     root.adoptedStyleSheets = [sheet];
 
@@ -144,13 +413,23 @@
 
     const search = document.createElement('div');
     search.className = 'search';
+
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'Search Tenor or paste a Tenor link';
     input.setAttribute('aria-label', 'Search Tenor or paste a Tenor link');
     input.autocomplete = 'off';
     input.spellcheck = false;
-    search.append(input);
+
+    const favoritesTab = document.createElement('button');
+    favoritesTab.type = 'button';
+    favoritesTab.className = 'favorites-tab';
+    favoritesTab.textContent = '★';
+    favoritesTab.title = 'Show favorite GIFs';
+    favoritesTab.setAttribute('aria-label', 'Show favorite GIFs');
+    favoritesTab.setAttribute('aria-pressed', 'false');
+
+    search.append(input, favoritesTab);
 
     const status = document.createElement('div');
     status.className = 'status';
@@ -163,20 +442,65 @@
     root.append(panel);
 
     input.addEventListener('input', () => {
+      picker.showingFavorites = false;
+      favoritesTab.setAttribute('aria-pressed', 'false');
+
       clearTimeout(picker.timer);
-      picker.timer = setTimeout(() => load(input.value), SEARCH_DEBOUNCE_MS);
+      picker.timer = setTimeout(
+        () => load(input.value),
+        SEARCH_DEBOUNCE_MS
+      );
     });
+
+    favoritesTab.addEventListener('click', () => {
+      picker.showingFavorites = !picker.showingFavorites;
+
+      favoritesTab.setAttribute(
+        'aria-pressed',
+        String(picker.showingFavorites)
+      );
+
+      if (picker.showingFavorites) {
+        clearTimeout(picker.timer);
+        picker.seq++;
+        render(picker.favorites);
+
+        setStatus(
+          picker.favorites.length
+            ? ''
+            : 'No favorite GIFs yet. Hover over a GIF and select the star.'
+        );
+      } else {
+        load(input.value);
+      }
+    });
+
     grid.addEventListener('click', (e) => {
+      const favoriteButton = e.target.closest('.favorite-toggle');
+
+      if (favoriteButton) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const gif = picker.gifs[Number(favoriteButton.dataset.index)];
+        if (gif) toggleFavorite(gif);
+        return;
+      }
+
       const tile = e.target.closest('.tile');
-      if (tile && !picker.busy) send(picker.gifs[Number(tile.dataset.index)]);
+
+      if (tile && !picker.busy) {
+        send(picker.gifs[Number(tile.dataset.index)]);
+      }
     });
 
     picker.host = host;
-    picker.els = { panel, input, status, grid };
+    picker.els = { panel, input, status, grid, favoritesTab };
   }
 
   function setStatus(text, kind) {
     picker.els.status.textContent = text || '';
+
     if (kind) picker.els.status.dataset.kind = kind;
     else delete picker.els.status.dataset.kind;
   }
@@ -188,13 +512,28 @@
 
   function place() {
     if (!picker.open) return;
-    if (!picker.anchor.isConnected) { closePicker(); return; }
-    const r = picker.anchor.getBoundingClientRect();
-    const h = Math.min(PICKER_H, innerHeight - 16);
-    picker.els.panel.style.height = `${h}px`;
-    let top = r.top - h - 8;
-    if (top < 8) top = Math.min(r.bottom + 8, innerHeight - h - 8);
-    const left = Math.min(Math.max(8, r.left), innerWidth - PICKER_W - 8);
+
+    if (!picker.anchor.isConnected) {
+      closePicker();
+      return;
+    }
+
+    const rect = picker.anchor.getBoundingClientRect();
+    const height = Math.min(PICKER_H, innerHeight - 16);
+
+    picker.els.panel.style.height = `${height}px`;
+
+    let top = rect.top - height - 8;
+
+    if (top < 8) {
+      top = Math.min(rect.bottom + 8, innerHeight - height - 8);
+    }
+
+    const left = Math.min(
+      Math.max(8, rect.left),
+      innerWidth - PICKER_W - 8
+    );
+
     picker.host.style.top = `${Math.max(8, top)}px`;
     picker.host.style.left = `${Math.max(8, left)}px`;
   }
@@ -202,79 +541,141 @@
   function openPicker(anchor, box) {
     if (!picker.host) buildPicker();
     if (picker.open) closePicker();
+
     picker.open = true;
     picker.anchor = anchor;
     picker.box = box;
+
     anchor.setAttribute('aria-expanded', 'true');
-    picker.els.panel.toggleAttribute('data-dark', document.documentElement.hasAttribute('dark'));
+
+    picker.els.panel.toggleAttribute(
+      'data-dark',
+      document.documentElement.hasAttribute('dark')
+    );
+
     document.documentElement.append(picker.host);
+
     setBusy(false);
     place();
     picker.els.input.focus();
+
+    picker.showingFavorites = false;
+    picker.els.favoritesTab.setAttribute('aria-pressed', 'false');
+
     load(picker.els.input.value);
   }
 
   function closePicker() {
     if (!picker.open) return;
+
     picker.open = false;
     clearTimeout(picker.timer);
     picker.seq++;
+
     picker.anchor.setAttribute('aria-expanded', 'false');
     picker.host.remove();
-    if (picker.anchor.isConnected && !picker.busy) picker.anchor.focus();
+
+    if (picker.anchor.isConnected && !picker.busy) {
+      picker.anchor.focus();
+    }
   }
 
-  const looksLikeLink = (text) => /^\d{6,20}$/.test(text) || /^(https?:\/\/)?([\w-]+\.)*tenor\.com\//i.test(text);
+  const looksLikeLink = (text) =>
+    /^\d{6,20}$/.test(text) ||
+    /^(https?:\/\/)?([\w-]+\.)*tenor\.com\//i.test(text);
 
   async function load(raw) {
     const text = raw.trim();
     const seq = ++picker.seq;
+
+    picker.showingFavorites = false;
+    picker.els.favoritesTab.setAttribute('aria-pressed', 'false');
+
     setStatus(text ? 'Searching…' : 'Loading…');
+
     let reply;
+
     try {
       reply = await chrome.runtime.sendMessage(
-        !text ? { type: 'featured' } : looksLikeLink(text) ? { type: 'resolve', input: text } : { type: 'search', query: text },
+        !text
+          ? { type: 'featured' }
+          : looksLikeLink(text)
+            ? { type: 'resolve', input: text }
+            : { type: 'search', query: text }
       );
-    } catch (e) {
-      reply = { ok: false, error: 'The extension was reloaded. Refresh this page.' };
+    } catch {
+      reply = {
+        ok: false,
+        error: 'The extension was reloaded. Refresh this page.'
+      };
     }
+
     if (seq !== picker.seq || !picker.open) return;
+
     if (!reply || !reply.ok) {
       render([]);
-      setStatus((reply && reply.error) || 'Tenor could not be reached.', 'error');
+      setStatus(
+        (reply && reply.error) || 'Tenor could not be reached.',
+        'error'
+      );
       return;
     }
+
     render(reply.gifs);
     setStatus(reply.gifs.length ? '' : 'No GIFs found.');
   }
 
   function render(gifs) {
     picker.gifs = gifs;
-    // Two columns that grow downwards; each GIF goes into the shorter one.
+
     const cols = [0, 1].map(() => {
       const col = document.createElement('div');
       col.className = 'col';
+
       return { el: col, height: 0 };
     });
-    gifs.forEach((gif, i) => {
+
+    gifs.forEach((gif, index) => {
       const tile = document.createElement('button');
       tile.type = 'button';
       tile.className = 'tile';
-      tile.dataset.index = String(i);
-      tile.title = gif.title;
+      tile.dataset.index = String(index);
+      tile.title = `Send ${gif.title || 'GIF'}`;
+      tile.setAttribute('aria-label', `Send ${gif.title || 'GIF'}`);
+
       const img = document.createElement('img');
       img.src = gif.preview;
-      img.alt = gif.title;
-      img.width = gif.width;
-      img.height = gif.height;
+      img.alt = gif.title || 'GIF';
+      img.width = Number(gif.width) || 1;
+      img.height = Number(gif.height) || 1;
       img.loading = 'lazy';
       img.referrerPolicy = 'no-referrer';
-      tile.append(img);
-      const col = cols[0].height <= cols[1].height ? cols[0] : cols[1];
+
+      const favoriteButton = document.createElement('button');
+      favoriteButton.type = 'button';
+      favoriteButton.className = 'favorite-toggle';
+      favoriteButton.dataset.index = String(index);
+
+      const favorite = isFavorite(gif);
+
+      favoriteButton.textContent = favorite ? '★' : '☆';
+      favoriteButton.title = favorite
+        ? 'Remove from favorites'
+        : 'Add to favorites';
+      favoriteButton.setAttribute('aria-label', favoriteButton.title);
+      favoriteButton.setAttribute('aria-pressed', String(favorite));
+
+      tile.append(img, favoriteButton);
+
+      const col = cols[0].height <= cols[1].height
+        ? cols[0]
+        : cols[1];
+
       col.el.append(tile);
-      col.height += gif.height / gif.width;
+      col.height += (Number(gif.height) || 1) / (Number(gif.width) || 1);
     });
-    picker.els.grid.replaceChildren(...cols.map((c) => c.el));
+
+    picker.els.grid.replaceChildren(...cols.map((col) => col.el));
     picker.els.grid.scrollTop = 0;
   }
 
@@ -282,51 +683,78 @@
 
   function selectRange(editor, range) {
     editor.focus();
-    const sel = getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
+
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 
-  // Adds the marker after whatever the user has typed, leaving their text
-  // (and any emoji or mentions in it) as it is.
   function appendMarker(editor, marker) {
     const range = document.createRange();
+
     range.selectNodeContents(editor);
     range.collapse(false);
     selectRange(editor, range);
+
     let done = false;
-    try { done = document.execCommand('insertText', false, marker); } catch (e) { /* fall back below */ }
+
+    try {
+      done = document.execCommand('insertText', false, marker);
+    } catch {}
+
     if (!done || !editor.textContent.includes(marker)) {
       editor.append(document.createTextNode(marker));
-      editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: marker }));
+
+      editor.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        inputType: 'insertText',
+        data: marker
+      }));
     }
   }
 
   function removeMarker(editor, marker) {
     const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const at = node.data.indexOf(marker);
       if (at === -1) continue;
+
       const range = document.createRange();
       range.setStart(node, at);
       range.setEnd(node, at + marker.length);
       selectRange(editor, range);
+
       let done = false;
-      try { done = document.execCommand('delete', false); } catch (e) { /* fall back below */ }
+
+      try {
+        done = document.execCommand('delete', false);
+      } catch {}
+
       if (!done || editor.textContent.includes(marker)) {
         node.data = node.data.replace(marker, '');
-        editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+
+        editor.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          inputType: 'deleteContentBackward'
+        }));
       }
+
       return;
     }
   }
 
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const sleep = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
 
   async function send(gif) {
+    if (!gif) return;
+
     const box = picker.box;
-    const editor = box && box.isConnected && box.querySelector('#contenteditable-root');
+    const editor = box && box.isConnected &&
+      box.querySelector('#contenteditable-root');
     const submit = box && box.querySelector('#submit-button button');
+
     if (!editor || !submit) {
       setStatus('The comment box was closed. Open it and try again.', 'error');
       return;
@@ -334,11 +762,19 @@
 
     const nonce = newNonce();
     const marker = `[[gif:${gif.id}:${nonce}]]`;
+
     let settle;
-    const settled = new Promise((resolve) => { settle = resolve; });
+    const settled = new Promise((resolve) => {
+      settle = resolve;
+    });
+
     let armedAck;
-    const armedPromise = new Promise((resolve) => { armedAck = resolve; });
+    const armedPromise = new Promise((resolve) => {
+      armedAck = resolve;
+    });
+
     let seen = false;
+
     fromMain.set(nonce, (msg) => {
       if (msg.type === 'armed') armedAck(true);
       else if (msg.type === 'refused') armedAck('refused');
@@ -348,38 +784,73 @@
 
     setBusy(true);
     setStatus('Posting…');
+
     try {
       toMain({ type: 'arm', id: gif.id, nonce });
-      // Without the page hook the marker would be posted as plain text, so
-      // nothing is typed into the box until the hook has answered.
-      const armed = await Promise.race([armedPromise, sleep(ARM_TIMEOUT_MS).then(() => false)]);
+
+      // Do not insert a marker unless the page hook is ready.
+      const armed = await Promise.race([
+        armedPromise,
+        sleep(ARM_TIMEOUT_MS).then(() => false)
+      ]);
+
       if (armed !== true) {
-        setStatus(armed === 'refused'
-          ? 'Not ready in this tab yet. Try again in a few seconds, or refresh this page.'
-          : 'The page hook is not running. Refresh this page and try again.', 'error');
+        setStatus(
+          armed === 'refused'
+            ? 'Not ready in this tab yet. Try again in a few seconds, or refresh this page.'
+            : 'The page hook is not running. Refresh this page and try again.',
+          'error'
+        );
         return;
       }
 
       appendMarker(editor, marker);
-      for (let i = 0; i < 20 && submit.disabled; i++) await sleep(50);
+
+      for (let i = 0; i < 20 && submit.disabled; i++) {
+        await sleep(50);
+      }
+
       submit.click();
 
-      let result = await Promise.race([settled, sleep(AUTO_SUBMIT_GRACE_MS).then(() => null)]);
+      let result = await Promise.race([
+        settled,
+        sleep(AUTO_SUBMIT_GRACE_MS).then(() => null)
+      ]);
+
       if (!result && !seen) {
-        const label = (submit.getAttribute('aria-label') || submit.textContent || 'Comment').trim();
+        const label = (
+          submit.getAttribute('aria-label') ||
+          submit.textContent ||
+          'Comment'
+        ).trim();
+
         setStatus(`Press ${label} to send the GIF.`);
       }
-      if (!result) result = await Promise.race([settled, sleep(RESULT_TIMEOUT_MS).then(() => null)]);
+
+      if (!result) {
+        result = await Promise.race([
+          settled,
+          sleep(RESULT_TIMEOUT_MS).then(() => null)
+        ]);
+      }
 
       if (result && result.ok) {
         setBusy(false);
         closePicker();
         return;
       }
-      // Failed or never sent: take the marker back out of the box.
+
       toMain({ type: 'disarm', nonce });
-      if (editor.isConnected) removeMarker(editor, marker);
-      setStatus((result && result.error) || 'The GIF was not sent. Nothing was posted.', 'error');
+
+      if (editor.isConnected) {
+        removeMarker(editor, marker);
+      }
+
+      setStatus(
+        (result && result.error) ||
+          'The GIF was not sent. Nothing was posted.',
+        'error'
+      );
     } finally {
       fromMain.delete(nonce);
       setBusy(false);
@@ -388,40 +859,67 @@
 
   // ------------------------------------------------------- page interactions
 
-  const inPicker = (e) => picker.open && e.composedPath().includes(picker.host);
+  const inPicker = (e) =>
+    picker.open && e.composedPath().includes(picker.host);
 
-  // Registered at document_start in the capture phase, ahead of YouTube's own
-  // handlers, so typing in the search field does not trigger player shortcuts
-  // and scrolling the grid does not flip to the next Short.
   for (const type of ['keydown', 'keyup', 'keypress']) {
     window.addEventListener(type, (e) => {
       if (!inPicker(e)) return;
+
       e.stopImmediatePropagation();
+
       if (type !== 'keydown') return;
+
       if (e.key === 'Escape') {
         e.preventDefault();
         closePicker();
-      } else if (e.key === 'Enter' && picker.gifs.length === 1 && !picker.busy) {
+      } else if (
+        e.key === 'Enter' &&
+        picker.gifs.length === 1 &&
+        !picker.busy
+      ) {
         e.preventDefault();
         send(picker.gifs[0]);
       }
     }, true);
   }
-  window.addEventListener('wheel', (e) => { if (inPicker(e)) e.stopImmediatePropagation(); }, { capture: true, passive: true });
+
+  window.addEventListener('wheel', (e) => {
+    if (inPicker(e)) e.stopImmediatePropagation();
+  }, { capture: true, passive: true });
 
   window.addEventListener('pointerdown', (e) => {
     if (!picker.open || picker.busy) return;
+
     const path = e.composedPath();
-    if (!path.includes(picker.host) && !path.includes(picker.anchor)) closePicker();
+
+    if (!path.includes(picker.host) && !path.includes(picker.anchor)) {
+      closePicker();
+    }
   }, true);
 
   let placeQueued = false;
+
   const queuePlace = () => {
     if (!picker.open || placeQueued) return;
+
     placeQueued = true;
-    requestAnimationFrame(() => { placeQueued = false; place(); });
+
+    requestAnimationFrame(() => {
+      placeQueued = false;
+      place();
+    });
   };
-  window.addEventListener('scroll', queuePlace, { capture: true, passive: true });
+
+  window.addEventListener('scroll', queuePlace, {
+    capture: true,
+    passive: true
+  });
+
   window.addEventListener('resize', queuePlace, { passive: true });
-  window.addEventListener('yt-navigate-start', () => { if (!picker.busy) closePicker(); });
+
+  window.addEventListener('yt-navigate-start', () => {
+    if (!picker.busy) closePicker();
+  });
 })();
+```
