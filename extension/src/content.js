@@ -1,10 +1,5 @@
-```javascript
-// Isolated-world content script: adds a GIF button to YouTube's comment boxes,
-// shows the picker, and hands the chosen GIF to the page-world hook (main.js)
-// by submitting a one-time marker through YouTube's own comment box.
+
 (() => {
-  // sw.js also injects this file into tabs that were open before the install;
-  // a tab must not end up with two copies.
   if (globalThis.gcfyLoaded) return;
   globalThis.gcfyLoaded = true;
 
@@ -26,83 +21,48 @@
     }
 
     .panel {
-      --bg: #fff;
-      --fg: #0f0f0f;
-      --muted: #606060;
-      --line: rgba(0,0,0,.12);
-      --field: rgba(0,0,0,.05);
-      --accent: #065fd4;
-      --err: #c00;
-      --thumb: rgba(0,0,0,.25);
-      --thumb-hover: rgba(0,0,0,.45);
-
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      width: ${PICKER_W}px;
-      background: var(--bg);
-      color: var(--fg);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      overflow: hidden;
+      --bg: #fff; --fg: #0f0f0f; --muted: #606060; --line: rgba(0,0,0,.12); --field: rgba(0,0,0,.05); --accent: #065fd4; --err: #c00;
+      --thumb: rgba(0,0,0,.25); --thumb-hover: rgba(0,0,0,.45);
+      box-sizing: border-box; display: flex; flex-direction: column;
+      width: ${PICKER_W}px; background: var(--bg); color: var(--fg);
+      border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
       box-shadow: 0 8px 28px rgba(0,0,0,.35);
       font: 13px/1.4 Roboto, Arial, sans-serif;
     }
 
     .panel[data-dark] {
-      --bg: #212121;
-      --fg: #f1f1f1;
-      --muted: #aaa;
-      --line: rgba(255,255,255,.14);
-      --field: rgba(255,255,255,.08);
-      --accent: #3ea6ff;
-      --err: #ff7b7b;
-      --thumb: rgba(255,255,255,.25);
-      --thumb-hover: rgba(255,255,255,.45);
+      --bg: #212121; --fg: #f1f1f1; --muted: #aaa; --line: rgba(255,255,255,.14);
+      --field: rgba(255,255,255,.08); --accent: #3ea6ff; --err: #ff7b7b;
+      --thumb: rgba(255,255,255,.25); --thumb-hover: rgba(255,255,255,.45);
     }
 
     .search {
-      flex: none;
-      padding: 8px;
-      border-bottom: 1px solid var(--line);
-      display: flex;
-      gap: 6px;
-      align-items: center;
+      flex: none; padding: 8px; border-bottom: 1px solid var(--line);
+      display: flex; gap: 6px; align-items: center;
     }
 
     .search input {
-      flex: 1;
-      min-width: 0;
+      flex: 1; min-width: 0;
     }
 
     .favorites-tab {
-      flex: none;
-      height: 34px;
-      padding: 0 10px;
-      border: 0;
-      border-radius: 17px;
-      background: var(--field);
-      color: var(--fg);
-      cursor: pointer;
-      font: inherit;
+      flex: none; height: 34px; min-width: 38px; padding: 0 10px;
+      border: 0; border-radius: 17px; background: var(--field);
+      color: var(--fg); cursor: pointer; font: inherit;
     }
 
     .favorites-tab[aria-pressed="true"] {
-      background: var(--accent);
-      color: #fff;
+      background: var(--accent); color: #fff;
+    }
+
+    .favorites-tab:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
     }
 
     input {
-      box-sizing: border-box;
-      width: 100%;
-      height: 34px;
-      padding: 0 12px;
-      border: 1px solid transparent;
-      border-radius: 17px;
-      outline: none;
-      background: var(--field);
-      color: var(--fg);
-      font: inherit;
+      box-sizing: border-box; width: 100%; height: 34px; padding: 0 12px;
+      border: 1px solid transparent; border-radius: 17px; outline: none;
+      background: var(--field); color: var(--fg); font: inherit;
     }
 
     input:focus {
@@ -114,9 +74,7 @@
     }
 
     .status {
-      flex: none;
-      padding: 6px 12px 0;
-      color: var(--muted);
+      flex: none; padding: 6px 12px 0; color: var(--muted);
     }
 
     .status:empty {
@@ -128,15 +86,9 @@
     }
 
     .grid {
-      flex: 1;
-      min-height: 0;
-      overflow-x: hidden;
-      overflow-y: auto;
-      padding: 8px 2px 8px 8px;
-      display: flex;
-      align-items: flex-start;
-      gap: 6px;
-      scrollbar-gutter: stable;
+      flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto;
+      padding: 8px 2px 8px 8px; display: flex; align-items: flex-start;
+      gap: 6px; scrollbar-gutter: stable;
     }
 
     .grid::-webkit-scrollbar {
@@ -148,49 +100,33 @@
     }
 
     .grid::-webkit-scrollbar-thumb {
-      border: 3px solid transparent;
-      border-radius: 6px;
-      background: var(--thumb);
-      background-clip: content-box;
+      border: 3px solid transparent; border-radius: 6px;
+      background: var(--thumb); background-clip: content-box;
     }
 
     .grid::-webkit-scrollbar-thumb:hover {
-      background: var(--thumb-hover);
-      background-clip: content-box;
+      background: var(--thumb-hover); background-clip: content-box;
     }
 
     @supports not selector(::-webkit-scrollbar) {
       .grid {
-        scrollbar-width: thin;
-        scrollbar-color: var(--thumb) transparent;
+        scrollbar-width: thin; scrollbar-color: var(--thumb) transparent;
         padding-right: 8px;
       }
     }
 
     .col {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+      flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;
     }
 
     .tile {
-      position: relative;
-      display: block;
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--field);
-      cursor: pointer;
+      position: relative; display: block; width: 100%; margin: 0; padding: 0;
+      border: 0; border-radius: 8px; overflow: hidden;
+      background: var(--field); cursor: pointer;
     }
 
     .tile:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 1px;
+      outline: 2px solid var(--accent); outline-offset: 1px;
     }
 
     .tile:hover img {
@@ -198,46 +134,34 @@
     }
 
     .tile img {
-      display: block;
-      width: 100%;
-      height: auto;
+      display: block; width: 100%; height: auto;
     }
 
     .favorite-toggle {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      z-index: 2;
-      width: 30px;
-      height: 30px;
-      display: grid;
-      place-items: center;
-      padding: 0;
-      border: 0;
-      border-radius: 50%;
-      background: rgba(0,0,0,.68);
-      color: #fff;
-      font: 22px/1 Arial, sans-serif;
-      cursor: pointer;
-      opacity: 0;
-      transform: scale(.92);
+      position: absolute; top: 6px; right: 6px; z-index: 2;
+      width: 30px; height: 30px; display: grid; place-items: center;
+      padding: 0; border: 0; border-radius: 50%;
+      background: rgba(0,0,0,.68); color: #fff; font: 22px/1 Arial, sans-serif;
+      cursor: pointer; opacity: 0; transform: scale(.92);
       transition: opacity .12s, transform .12s;
     }
 
     .tile:hover .favorite-toggle,
     .favorite-toggle:focus-visible,
     .favorite-toggle[aria-pressed="true"] {
-      opacity: 1;
-      transform: scale(1);
+      opacity: 1; transform: scale(1);
     }
 
     .favorite-toggle[aria-pressed="true"] {
       color: #ffd45c;
     }
 
+    .favorite-toggle:focus-visible {
+      outline: 2px solid #fff; outline-offset: 2px;
+    }
+
     .panel[data-busy] .tile {
-      pointer-events: none;
-      opacity: .45;
+      pointer-events: none; opacity: .45;
     }
   `;
 
@@ -319,16 +243,23 @@
 
   // ---------------------------------------------------------------- favorites
 
-  function loadFavorites() {
+  async function loadFavorites() {
     try {
-      const saved = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+      const result = await chrome.storage.local.get(FAVORITES_KEY);
+      const saved = result[FAVORITES_KEY] || [];
 
       return Array.isArray(saved)
         ? saved.filter((gif) =>
             gif &&
             typeof gif.id === 'string' &&
             typeof gif.preview === 'string'
-          )
+          ).map((gif) => ({
+            id: gif.id,
+            preview: gif.preview,
+            title: String(gif.title || 'GIF'),
+            width: Number(gif.width) || 1,
+            height: Number(gif.height) || 1
+          }))
         : [];
     } catch {
       return [];
@@ -345,15 +276,35 @@
     seq: 0,
     timer: 0,
     gifs: [],
-    favorites: loadFavorites(),
+    favorites: [],
     showingFavorites: false
   };
 
-  function saveFavorites() {
+  loadFavorites().then((favorites) => {
+    picker.favorites = favorites;
+
+    if (picker.open && picker.showingFavorites) {
+      const scrollTop = picker.els.grid.scrollTop;
+      render(picker.favorites);
+      picker.els.grid.scrollTop = scrollTop;
+
+      setStatus(
+        picker.favorites.length
+          ? ''
+          : 'No favorite GIFs yet. Hover over a GIF and select the star.'
+      );
+    }
+  });
+
+  async function saveFavorites() {
     try {
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(picker.favorites));
+      await chrome.storage.local.set({
+        [FAVORITES_KEY]: picker.favorites
+      });
+      return true;
     } catch {
       setStatus('Could not save favorites in this browser.', 'error');
+      return false;
     }
   }
 
@@ -363,7 +314,19 @@
     );
   }
 
-  function toggleFavorite(gif) {
+  function updateFavoriteButton(button, gif) {
+    if (!button || !gif) return;
+
+    const favorite = isFavorite(gif);
+    const label = favorite ? 'Remove from favorites' : 'Add to favorites';
+
+    button.textContent = favorite ? '★' : '☆';
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-pressed', String(favorite));
+  }
+
+  function toggleFavorite(gif, button) {
     if (!gif) return;
 
     const id = String(gif.id);
@@ -385,14 +348,19 @@
     saveFavorites();
 
     if (picker.showingFavorites) {
+      const scrollTop = picker.els.grid.scrollTop;
+
       render(picker.favorites);
+      picker.els.grid.scrollTop = scrollTop;
+
       setStatus(
         picker.favorites.length
           ? ''
           : 'No favorite GIFs yet. Hover over a GIF and select the star.'
       );
     } else {
-      render(picker.gifs);
+      // Update only the clicked star so the grid position and focused tile stay unchanged.
+      updateFavoriteButton(button, gif);
     }
   }
 
@@ -453,6 +421,10 @@
     });
 
     favoritesTab.addEventListener('click', () => {
+      // Cancel a pending debounce so it cannot replace the favorites view.
+      clearTimeout(picker.timer);
+      picker.timer = 0;
+
       picker.showingFavorites = !picker.showingFavorites;
 
       favoritesTab.setAttribute(
@@ -461,7 +433,6 @@
       );
 
       if (picker.showingFavorites) {
-        clearTimeout(picker.timer);
         picker.seq++;
         render(picker.favorites);
 
@@ -476,18 +447,21 @@
     });
 
     grid.addEventListener('click', (e) => {
-      const favoriteButton = e.target.closest('.favorite-toggle');
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target) return;
+
+      const favoriteButton = target.closest('.favorite-toggle');
 
       if (favoriteButton) {
         e.preventDefault();
         e.stopPropagation();
 
         const gif = picker.gifs[Number(favoriteButton.dataset.index)];
-        if (gif) toggleFavorite(gif);
+        if (gif) toggleFavorite(gif, favoriteButton);
         return;
       }
 
-      const tile = e.target.closest('.tile');
+      const tile = target.closest('.tile');
 
       if (tile && !picker.busy) {
         send(picker.gifs[Number(tile.dataset.index)]);
@@ -499,6 +473,8 @@
   }
 
   function setStatus(text, kind) {
+    if (!picker.els) return;
+
     picker.els.status.textContent = text || '';
 
     if (kind) picker.els.status.dataset.kind = kind;
@@ -507,7 +483,10 @@
 
   function setBusy(busy) {
     picker.busy = busy;
-    picker.els.panel.toggleAttribute('data-busy', busy);
+
+    if (picker.els) {
+      picker.els.panel.toggleAttribute('data-busy', busy);
+    }
   }
 
   function place() {
@@ -572,10 +551,13 @@
     clearTimeout(picker.timer);
     picker.seq++;
 
-    picker.anchor.setAttribute('aria-expanded', 'false');
+    if (picker.anchor) {
+      picker.anchor.setAttribute('aria-expanded', 'false');
+    }
+
     picker.host.remove();
 
-    if (picker.anchor.isConnected && !picker.busy) {
+    if (picker.anchor?.isConnected && !picker.busy) {
       picker.anchor.focus();
     }
   }
@@ -621,12 +603,14 @@
       return;
     }
 
-    render(reply.gifs);
-    setStatus(reply.gifs.length ? '' : 'No GIFs found.');
+    render(Array.isArray(reply.gifs) ? reply.gifs : []);
+    setStatus(reply.gifs?.length ? '' : 'No GIFs found.');
   }
 
   function render(gifs) {
-    picker.gifs = gifs;
+    if (!picker.els) return;
+
+    picker.gifs = Array.isArray(gifs) ? gifs : [];
 
     const cols = [0, 1].map(() => {
       const col = document.createElement('div');
@@ -635,11 +619,12 @@
       return { el: col, height: 0 };
     });
 
-    gifs.forEach((gif, index) => {
-      const tile = document.createElement('button');
-      tile.type = 'button';
+    picker.gifs.forEach((gif, index) => {
+      const tile = document.createElement('div');
       tile.className = 'tile';
       tile.dataset.index = String(index);
+      tile.tabIndex = 0;
+      tile.setAttribute('role', 'button');
       tile.title = `Send ${gif.title || 'GIF'}`;
       tile.setAttribute('aria-label', `Send ${gif.title || 'GIF'}`);
 
@@ -656,14 +641,7 @@
       favoriteButton.className = 'favorite-toggle';
       favoriteButton.dataset.index = String(index);
 
-      const favorite = isFavorite(gif);
-
-      favoriteButton.textContent = favorite ? '★' : '☆';
-      favoriteButton.title = favorite
-        ? 'Remove from favorites'
-        : 'Add to favorites';
-      favoriteButton.setAttribute('aria-label', favoriteButton.title);
-      favoriteButton.setAttribute('aria-pressed', String(favorite));
+      updateFavoriteButton(favoriteButton, gif);
 
       tile.append(img, favoriteButton);
 
@@ -748,7 +726,7 @@
     new Promise((resolve) => setTimeout(resolve, ms));
 
   async function send(gif) {
-    if (!gif) return;
+    if (!gif || picker.busy) return;
 
     const box = picker.box;
     const editor = box && box.isConnected &&
@@ -795,6 +773,8 @@
       ]);
 
       if (armed !== true) {
+        toMain({ type: 'disarm', nonce });
+
         setStatus(
           armed === 'refused'
             ? 'Not ready in this tab yet. Try again in a few seconds, or refresh this page.'
@@ -866,9 +846,27 @@
     window.addEventListener(type, (e) => {
       if (!inPicker(e)) return;
 
+      // Capture phase prevents YouTube's page-level handlers from consuming picker keys.
       e.stopImmediatePropagation();
 
       if (type !== 'keydown') return;
+
+      const target = e.target instanceof Element ? e.target : null;
+      const tile = target && target.closest('.tile');
+      const favoriteButton = target && target.closest('.favorite-toggle');
+
+      if (
+        tile &&
+        !favoriteButton &&
+        (e.key === 'Enter' || e.key === ' ')
+      ) {
+        e.preventDefault();
+
+        if (!picker.busy) {
+          send(picker.gifs[Number(tile.dataset.index)]);
+        }
+        return;
+      }
 
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -876,7 +874,8 @@
       } else if (
         e.key === 'Enter' &&
         picker.gifs.length === 1 &&
-        !picker.busy
+        !picker.busy &&
+        !favoriteButton
       ) {
         e.preventDefault();
         send(picker.gifs[0]);
@@ -922,4 +921,3 @@
     if (!picker.busy) closePicker();
   });
 })();
-```
