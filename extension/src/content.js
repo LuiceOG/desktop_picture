@@ -1,4 +1,3 @@
-
 (() => {
   if (globalThis.gcfyLoaded) return;
   globalThis.gcfyLoaded = true;
