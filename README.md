@@ -22,7 +22,18 @@ Desktop GIFs is not on the Chrome Web Store. Load it from this folder:
 4. Click **Load unpacked** and choose the `extension` folder.
 5. Reload any YouTube tabs that were already open.
 
-It needs Chrome 111 or newer. Other Chromium browsers should work but are untested. Firefox is not supported.
+It needs Chrome 111 or newer. Other Chromium browsers should work but are untested. 
+
+## Install (FIREFOX)
+
+1. Download the zip. (DON'T EXTRACT IT)
+
+2. Open firefox and go to about:debugging
+
+3. Go to the "this firefox" tab, and add the zip as a temporary extension.
+
+
+**WARNING: You will have to repeat this step everytime you open and close Firefox, and the GIF icon doesn't show up for some reason, it's at the right of the emoji button, just hovering over it should make you see it)
 
 ## Use
 
