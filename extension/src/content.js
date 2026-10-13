@@ -1,7 +1,11 @@
+// Isolated-world content script: adds a GIF button to YouTube's comment boxes,
+// shows the picker, and hands the chosen GIF to the page-world hook (main.js)
+// by submitting a one-time marker through YouTube's own comment box.
 (() => {
+  // sw.js also injects this file into tabs that were open before the install;
+  // a tab must not end up with two copies.
   if (globalThis.gcfyLoaded) return;
-  globalThis.gcfyLoaded = true;
-
+  
   const BOX_SCOPE = 'ytd-comment-simplebox-renderer, ytd-comment-thread-renderer';
   const POST_DIALOG = 'ytd-backstage-post-dialog-renderer';
   const PICKER_W = 340;
