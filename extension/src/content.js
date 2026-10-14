@@ -495,7 +495,9 @@
   function enableSubmit(box) {
     const submit = submitOf(box);
     const att = attachments.get(box);
-    if (!submit || !att) return;
+    // Only compensate for an empty GIF-only draft. Once a marker or real text
+    // is present, YouTube controls validation and loading disabled states.
+    if (!submit || !att || att.posting || editorOf(box)?.textContent.trim()) return;
     if (submit.disabled) submit.disabled = false;
     if (submit.hasAttribute('aria-disabled')) submit.removeAttribute('aria-disabled');
     for (const style of BUTTON_STYLES) {
@@ -549,6 +551,26 @@
     att.chip.toggleAttribute('data-busy', true);
     setChipStatus(att, 'Posting…');
     try {
+      setChipStatus(att, 'Checking GIF…');
+      let checked;
+      try {
+        checked = await chrome.runtime.sendMessage({ type: 'check', id: att.gif.id });
+      } catch (e) {
+        checked = { ok: false, error: 'The extension was reloaded. Refresh this page.' };
+      }
+      const verified = checked && checked.ok && Array.isArray(checked.gifs)
+        && checked.gifs.find((gif) => gif.id === att.gif.id && gif.contentRating === 'G');
+      if (!verified) {
+        setChipStatus(att, (checked && checked.error) || 'Tenor could not verify this GIF. Try again later.', 'error');
+        return;
+      }
+      // A reply dialog can be closed while Tenor is being checked. Closing the
+      // box cancels this submission, even if YouTube keeps its DOM for reuse.
+      if (!box.isConnected || !editor.getClientRects().length) {
+        setChipStatus(att, 'The comment box was closed. Open it and try again.', 'error');
+        return;
+      }
+      setChipStatus(att, 'Posting…');
       toMain({ type: 'arm', id: att.gif.id, nonce });
       // Without the page hook the marker would be posted as plain text, so
       // nothing is typed into the box until the hook has answered.
@@ -557,6 +579,12 @@
         setChipStatus(att, armed === 'refused'
           ? 'Not ready in this tab yet. Try again in a few seconds, or refresh this page.'
           : 'The page hook is not running. Refresh this page and try again.', 'error');
+        return;
+      }
+
+      if (!box.isConnected || !editor.getClientRects().length) {
+        toMain({ type: 'disarm', nonce });
+        setChipStatus(att, 'The comment box was closed. Open it and try again.', 'error');
         return;
       }
 
@@ -580,6 +608,7 @@
       fromMain.delete(nonce);
       att.posting = false;
       att.chip.toggleAttribute('data-busy', false);
+      enableSubmit(box);
     }
   }
 

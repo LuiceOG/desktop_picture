@@ -12,6 +12,7 @@ const TENOR = 'https://tenor.com';
 const TENOR_API = 'https://tenor.googleapis.com/v2';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_RESULTS = 50;
+const TENOR_TIMEOUT_MS = 10000;
 
 // url -> { time, value }
 const cache = new Map();
@@ -46,6 +47,7 @@ async function handle(msg) {
   if (msg.type === 'featured') return featured();
   if (msg.type === 'search' && typeof msg.query === 'string') return search(msg.query);
   if (msg.type === 'resolve' && typeof msg.input === 'string') return resolve(msg.input);
+  if (msg.type === 'check' && typeof msg.id === 'string' && /^\d{1,20}$/.test(msg.id)) return checkGif(msg.id);
   throw new Error('Bad request.');
 }
 
@@ -62,7 +64,7 @@ async function cached(url, load) {
 // values its own scripts send to Tenor's API (null if they cannot be read).
 function fetchPage(url) {
   return cached(url, async () => {
-    const res = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+    const res = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: AbortSignal.timeout(TENOR_TIMEOUT_MS) });
     if (!res.ok) throw new Error(res.status === 404 ? 'Tenor could not find that GIF.' : `Tenor returned HTTP ${res.status}.`);
     if (new URL(res.url).origin !== TENOR) throw new Error('Tenor redirected somewhere unexpected.');
     const html = await res.text();
@@ -92,7 +94,7 @@ async function fetchApi(path, params) {
   const query = new URLSearchParams({ ...keys, contentfilter: 'high', media_filter: 'tinygif,tinywebp,gif', ...params });
   const url = `${TENOR_API}${path}?${query}`;
   return cached(url, async () => {
-    const res = await fetch(url, { credentials: 'omit' });
+    const res = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(TENOR_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`Tenor returned HTTP ${res.status}.`);
     const { results } = await res.json();
     if (!Array.isArray(results)) throw new Error('Tenor sent an answer that could not be read.');
@@ -117,10 +119,26 @@ function toGif(r) {
     preview: f.url,
     width: dims[0] || 220,
     height: dims[1] || 124,
+    contentRating: typeof r.content_rating === 'string' ? r.content_rating : null,
   };
 }
 
 const toGifs = (results) => (results || []).map(toGif).filter(Boolean).slice(0, MAX_RESULTS);
+
+// Favorites and HTML fallback results may never have had their rating checked.
+// Verify the exact selected ID before arming a request.
+async function checkGif(id) {
+  const results = await fetchApi('/posts', { ids: id, contentfilter: 'off' });
+  const post = results.find((r) => r && String(r.id) === id);
+  const gif = post && toGif(post);
+  if (!gif) throw new Error('Tenor could not verify this GIF. Pick another one.');
+  if (post.content_rating !== 'G') {
+    throw new Error(typeof post.content_rating === 'string'
+      ? `YouTube only takes GIFs that Tenor rates G. This one is rated ${post.content_rating}.`
+      : 'Tenor did not return a rating for this GIF. Try again later.');
+  }
+  return [gif];
+}
 
 async function featured() {
   try {

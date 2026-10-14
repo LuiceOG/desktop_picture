@@ -81,13 +81,16 @@
   const gifs = [
     { id: '13723327785995541767', title: 'First GIF', width: 120, height: 80 },
     { id: '12696714748418769445', title: 'Second GIF', width: 120, height: 80 },
-  ].map((gif) => ({ ...gif, preview: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }));
+  ].map((gif) => ({ ...gif, contentRating: 'G', preview: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }));
   let favorites = [];
   const storageListeners = [];
   window.chrome = {
     runtime: {
       async sendMessage(message) {
         stats.requests.push(message);
+        if (message.type === 'check' && window.checkFailure) return { ok: false, error: window.checkFailure };
+        if (message.type === 'check' && window.delayCheck) await new Promise((resolve) => { window.finishCheck = resolve; });
+        if (message.type === 'check') return { ok: true, gifs: gifs.filter((gif) => gif.id === message.id) };
         return { ok: true, gifs: message.type === 'search' ? gifs.slice(0, 1) : gifs };
       },
     },
@@ -109,15 +112,23 @@
     window.postMessage({ gcfy: 'to-content', type: 'armed', nonce: event.data.nonce }, location.origin);
   });
   for (const box of document.querySelectorAll('ytd-commentbox')) {
+    // Native YouTube enables a valid nonempty draft after input, then disables
+    // submission during its request. Keep those transitions in the fixture.
+    box.querySelector('#contenteditable-root').addEventListener('input', () => {
+      box.querySelector('#submit-button button').disabled = !box.querySelector('#contenteditable-root').textContent.trim();
+    });
     box.querySelector('#submit-button button').addEventListener('click', () => {
       const text = box.querySelector('#contenteditable-root').textContent;
       stats.posts.push({ box: box.id, text });
       const nonce = text.match(/\[\[gif:\d+:([a-z0-9]+)\]\]/)?.[1];
       if (nonce) {
+        box.querySelector('#submit-button button').disabled = true;
         window.postMessage({ gcfy: 'to-content', type: 'seen', nonce }, location.origin);
-        window.postMessage({ gcfy: 'to-content', type: 'result', nonce, ok: true }, location.origin);
+        const finish = () => window.postMessage({ gcfy: 'to-content', type: 'result', nonce, ok: !window.postFailure, error: window.postFailure }, location.origin);
+        if (window.delayPost) window.finishPost = finish;
+        else finish();
       }
-      box.querySelector('#contenteditable-root').textContent = '';
+      if (!window.postFailure) box.querySelector('#contenteditable-root').textContent = '';
     });
   }
 </script>

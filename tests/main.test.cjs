@@ -11,16 +11,18 @@ const id = '13723327785995541767';
 const nonce = 'regression123456';
 const marker = `[[gif:${id}:${nonce}]]`;
 
-function hook(reply = { actionResult: { status: 'STATUS_SUCCEEDED' } }, status = 200) {
+function hook(reply = { actionResult: { status: 'STATUS_SUCCEEDED' } }, status = 200, retryReply, retryStatus = 200) {
   const messages = [];
   const requests = [];
   const warnings = [];
   let onMessage;
   const response = new Response(typeof reply === 'string' ? reply : JSON.stringify(reply), { status });
+  const responses = [response];
+  if (retryReply !== undefined) responses.push(new Response(typeof retryReply === 'string' ? retryReply : JSON.stringify(retryReply), { status: retryStatus }));
   const window = {
     fetch: async (input, init) => {
       requests.push(new Request(input, init));
-      return response;
+      return responses[Math.min(requests.length - 1, responses.length - 1)];
     },
     addEventListener: (type, listener) => { if (type === 'message') onMessage = listener; },
     postMessage: (message) => messages.push(message),
@@ -31,8 +33,8 @@ function hook(reply = { actionResult: { status: 'STATUS_SUCCEEDED' } }, status =
     console: { warn: (...args) => warnings.push(args) },
   });
   return {
-    window, response, requests, messages, warnings,
-    arm: () => onMessage({ source: window, origin, data: { gcfy: 'to-main', type: 'arm', id, nonce } }),
+    window, response, responses, requests, messages, warnings,
+    arm: (rated = false) => onMessage({ source: window, origin, data: { gcfy: 'to-main', type: 'arm', id, nonce, contentRating: rated ? 'G' : null } }),
     result: () => messages.findLast((message) => message.type === 'result'),
     send: (text = `hello ${marker}`, url = create) => window.fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -199,3 +201,27 @@ test('unarmed, reused and unsupported markers never reach YouTube', async () => 
   await assert.rejects(edit.send(marker, `${origin}/youtubei/v1/comment/update_comment`), /marker blocked/);
   assert.equal(edit.requests.length, 0);
 });
+
+const invalid = { error: { status: 'INVALID_ARGUMENT', message: 'Request contains an invalid argument.' } };
+const success = { actionResult: { status: 'STATUS_SUCCEEDED' } };
+
+for (const [label, reply, status] of [
+  ['INVALID_ARGUMENT', invalid, 400],
+  ['success', success, 200],
+  ['an unreadable response', '<html>temporary error</html>', 200],
+  ['a missing confirmation', {}, 200],
+  ['a server error', invalid, 500],
+  ['an account denial', { error: { status: 'PERMISSION_DENIED', message: 'Denied' } }, 403],
+]) {
+  test(`one user submission sends one request after ${label}, including verified G-rated GIFs`, async () => {
+    const h = hook(reply, status, success);
+    h.arm(true);
+    assert.equal(await h.send(), h.response);
+    assert.equal(h.requests.length, 1);
+    const body = await h.requests[0].json();
+    assert.equal(body.context.client.clientName, 'WEB');
+    assert.equal(body.commentText, 'hello');
+    assert.equal(body.tenorId, id);
+    assert.equal(h.requests[0].headers.has('X-YouTube-Client-Name'), false);
+  });
+}

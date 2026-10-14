@@ -147,6 +147,60 @@ class PickerTests(unittest.TestCase):
         self.assertTrue(posts[0]['text'].startswith('[[gif:13723327785995541767:'))
         self.assert_picker_events_contained()
 
+    def test_failed_rating_check_preserves_draft_and_never_arms_or_posts(self):
+        self.page.locator('#modal-box #contenteditable-root').fill('Keep my reply')
+        self.open_picker()
+        self.page.locator('.tile').first.click()
+        self.page.evaluate("window.checkFailure = 'Tenor did not return a rating for this GIF.'")
+        self.page.locator('#modal-box #submit-button button').click()
+        self.page.wait_for_function("document.querySelector('.gcfy-attachment-status').textContent.includes('Tenor did not return')")
+        self.assertEqual(self.page.evaluate('stats.arms'), [])
+        self.assertEqual(self.page.evaluate('stats.posts'), [])
+        self.assertEqual(self.page.locator('#modal-box #contenteditable-root').inner_text(), 'Keep my reply')
+        self.assertEqual(self.page.locator('#modal-box .gcfy-attachment').count(), 1)
+        self.assert_modal_open()
+
+    def test_closing_reply_during_rating_check_cancels_submission(self):
+        self.open_picker()
+        self.page.locator('.tile').first.click()
+        self.page.evaluate('window.delayCheck = true')
+        self.page.locator('#modal-box #submit-button button').click()
+        self.page.wait_for_function("typeof window.finishCheck === 'function'")
+        self.page.locator('#outside').click()
+        self.page.evaluate('window.finishCheck()')
+        self.page.wait_for_function("document.querySelector('.gcfy-attachment-status').textContent.includes('box was closed')")
+        self.assertEqual(self.page.evaluate('stats.arms'), [])
+        self.assertEqual(self.page.evaluate('stats.posts'), [])
+        self.assertEqual(self.page.locator('#modal-box #contenteditable-root').inner_text(), '')
+
+    def test_native_loading_button_stays_disabled_and_failed_gif_can_be_retried(self):
+        self.open_picker()
+        self.page.locator('.tile').first.click()
+        self.page.evaluate("window.delayPost = true; window.postFailure = 'YouTube rejected the test request.'")
+        submit = self.page.locator('#modal-box #submit-button button')
+        submit.click()
+        self.page.wait_for_function("typeof window.finishPost === 'function'")
+        self.page.evaluate('() => new Promise(requestAnimationFrame)')
+        self.assertFalse(submit.is_enabled())
+        self.page.locator('#modal-box #contenteditable-root').press('Control+Enter')
+        self.assertEqual(len(self.page.evaluate('stats.posts')), 1)
+        self.page.evaluate('window.finishPost()')
+        self.page.wait_for_function("document.querySelector('.gcfy-attachment-status').textContent.includes('rejected the test')")
+        self.assertEqual(self.page.locator('#modal-box #contenteditable-root').inner_text().strip(), '')
+        self.assertTrue(submit.is_enabled())
+        self.assertEqual(self.page.locator('#modal-box .gcfy-attachment').count(), 1)
+
+    def test_attachment_does_not_override_native_disabled_state_of_a_text_draft(self):
+        editor = self.page.locator('#modal-box #contenteditable-root')
+        editor.fill('Draft that YouTube is validating')
+        self.open_picker()
+        self.page.locator('.tile').first.click()
+        submit = self.page.locator('#modal-box #submit-button button')
+        self.page.evaluate("document.querySelector('#modal-box #submit-button button').disabled = true")
+        self.page.evaluate('() => new Promise(requestAnimationFrame)')
+        self.assertFalse(submit.is_enabled())
+        self.assertEqual(self.page.evaluate('stats.posts'), [])
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
