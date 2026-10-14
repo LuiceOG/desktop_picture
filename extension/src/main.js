@@ -80,7 +80,7 @@
     }).filter(Boolean);
   }
 
-  function reportResponse(response, json, nonce, url) {
+  function reportResponse(response, json, nonce, url, tenorId, hasText) {
     const action = json && json.actionResult;
     const serverErrors = json ? [
       textOf(json.error && json.error.message),
@@ -106,14 +106,18 @@
     // Deliberately omit the request, headers, account data and response body.
     // These few fields let a bug report distinguish a rejection from an
     // unreadable response without exposing the user's comment or credentials.
-    console.warn('Desktop GIFs: comment not confirmed', {
+    // Serialize explicitly: Chromium's extension error list otherwise renders
+    // the useful diagnostic as just "[object Object]".
+    console.warn('Desktop GIFs: comment not confirmed', JSON.stringify({
       endpoint: CREATE_URL.test(url) && /create_comment_reply(\?|$)/.test(url) ? 'create_comment_reply' : 'create_comment',
+      tenorId,
+      hasText,
       httpStatus: response.status,
       apiStatus: typeof apiStatus === 'string' ? apiStatus : null,
       actionStatus: action && typeof action.status === 'string' ? action.status : null,
       responseReadable: json !== null,
       message,
-    });
+    }));
     toContent({ type: 'result', nonce, ok: false, error });
   }
 
@@ -177,7 +181,7 @@
 
     let json = null;
     try { json = await response.clone().json(); } catch (e) { /* an unreadable response does not confirm a post */ }
-    reportResponse(response, json, nonce, url);
+    reportResponse(response, json, nonce, url, id, !!ownText);
     return response;
   }
 })();

@@ -135,6 +135,11 @@ test('diagnostics omit the comment, request headers, attestation and response da
   h.arm();
   await h.send(`private-comment-text ${marker}`);
   assert.equal(h.warnings.length, 1);
+  assert.equal(typeof h.warnings[0][1], 'string');
+  const detail = JSON.parse(h.warnings[0][1]);
+  assert.equal(detail.tenorId, id);
+  assert.equal(detail.hasText, true);
+  assert.equal(detail.endpoint, 'create_comment');
   const diagnostics = JSON.stringify(h.warnings);
   assert.match(diagnostics, /PERMISSION_DENIED/);
   assert.doesNotMatch(diagnostics, /private-comment-text|page-attestation|private-response-data|original-params/);

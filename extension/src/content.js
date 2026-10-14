@@ -147,6 +147,16 @@
 
   function buildPicker() {
     const host = document.createElement('div');
+    // Keep the event path inside the originating reply dialog. A manual
+    // popover still renders above it without clipping or transformed ancestors
+    // changing the fixed coordinates used by place().
+    host.setAttribute('popover', 'manual');
+    // Let the picker's controls run, then stop pointer events before they reach
+    // YouTube's handlers. Do not check picker.open here: selecting a GIF removes
+    // the picker while that same click is still bubbling through its old path.
+    for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu']) {
+      host.addEventListener(type, (e) => e.stopPropagation());
+    }
     const root = host.attachShadow({ mode: 'open' });
     // A <style> element rather than adoptedStyleSheets: Firefox does not let a
     // content script assign constructed stylesheets to a page's shadow root.
@@ -235,7 +245,8 @@
     picker.box = box;
     anchor.setAttribute('aria-expanded', 'true');
     picker.els.panel.toggleAttribute('data-dark', document.documentElement.hasAttribute('dark'));
-    document.documentElement.append(picker.host);
+    box.append(picker.host);
+    picker.host.showPopover();
     place();
     picker.els.input.focus();
     load(picker.els.input.value);
@@ -593,6 +604,9 @@
   }, true);
 
   window.addEventListener('keydown', (e) => {
+    // The picker is now a descendant of the comment box; its search shortcuts
+    // must not submit a GIF that is already attached to that box.
+    if (inPicker(e)) return;
     if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
     const box = boxIn(e.composedPath());
     if (!box || !attachments.has(box)) return;

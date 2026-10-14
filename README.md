@@ -118,7 +118,9 @@ To keep a GIF, point at it and click the star in its corner. The **★** button 
 | Chrome, Edge or Brave lists the error `'background.scripts' requires manifest version of 2 or lower` | The extension is installed and works. The message appears when the `extension` folder is loaded from the source; that key is there for Firefox. `desktop-gifs-chromium.zip` does not have it. |
 | Clicking **GIF** does nothing in Firefox | Update to 0.1.1 or newer. |
 
-If posting still fails, open the browser's developer tools and find **Desktop GIFs: comment not confirmed** in the YouTube tab's Console. The diagnostic includes the endpoint name, HTTP status, API/action status and server explanation. Share those fields in a bug report, without request headers, cookies or a full network capture. Version 0.1.5 improves error reporting and request handling; it does not establish or bypass a YouTube restriction on GIF comments.
+If posting still fails, open the browser's developer tools and find **Desktop GIFs: comment not confirmed** in the YouTube tab's Console. The diagnostic includes the endpoint name, Tenor ID, whether text was included, HTTP status, API/action status and server explanation. It is also readable in Chromium's extension error list. Share those fields in a bug report, without request headers, cookies or a full network capture. Version 0.1.5 improves error reporting and request handling; it does not establish or bypass a YouTube restriction on GIF comments.
+
+In notification reply dialogs, the GIF picker stays inside the originating reply box so searching, using favorites or choosing a GIF does not dismiss the reply dialog. Pressing **Esc** closes the picker and returns focus to its GIF button.
 
 ## Limits
 
@@ -142,6 +144,8 @@ When you pick a GIF, the content script attaches it to the comment box. When you
 There is no build step and there are no dependencies: the `extension` folder is the extension. `python3 tools/package.py` writes the two release ZIPs, which are that folder with the other browser's background key taken out of the manifest.
 
 Run `node --test tests/main.test.cjs` with Node.js 22 or newer to check the request hook against simulated YouTube responses. These tests do not publish comments or verify that a signed-in YouTube account can post a GIF.
+
+For browser interaction regressions, install Python's `playwright` package and its Chromium and Firefox browsers (`python -m playwright install chromium firefox`), then run `python tests/picker.browser.py`. The fixture simulates notification reply dialogs, including capture-phase outside-click dismissal, transformed/scrolling containers and a native modal dialog. All Tenor results and posting acknowledgements are local test data.
 
 ## Privacy
 
