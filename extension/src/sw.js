@@ -68,6 +68,8 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
       const ua = headers.find(h => h.name.toLowerCase() === "user-agent")
       if (ua) {
         ua.value = SPOOFED_UA
+      } else {
+        console.warn("Desktop GIFs - User Agent couldnt be found to spoof") // hey rayytor, you can replace this warning with whatever sounds best to you
       }
       return { requestHeaders: headers }
     }
