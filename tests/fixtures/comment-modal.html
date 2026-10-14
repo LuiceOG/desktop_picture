@@ -122,7 +122,9 @@
   window.addEventListener('message', (event) => {
     if (event.source !== window || event.data?.gcfy !== 'to-main' || event.data.type !== 'arm') return;
     stats.arms.push(event.data);
-    window.postMessage({ gcfy: 'to-content', type: 'armed', nonce: event.data.nonce }, location.origin);
+    const finish = () => window.postMessage({ gcfy: 'to-content', type: 'armed', nonce: event.data.nonce }, location.origin);
+    if (window.delayArm) window.finishArm = finish;
+    else finish();
   });
   for (const box of document.querySelectorAll('ytd-commentbox')) {
     // Native YouTube enables a valid nonempty draft after input, then disables
