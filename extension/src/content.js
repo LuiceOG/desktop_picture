@@ -25,7 +25,7 @@
   const SEARCH_DEBOUNCE_MS = 350;
   const ARM_TIMEOUT_MS = 1500;
   const SUBMIT_GRACE_MS = 4000;
-  // Long enough for main.js to try a blocked GIF comment again.
+  // Wait for the page's single request; a timeout does not prove rejection.
   const RESULT_TIMEOUT_MS = 60000;
   // How long a post waits for Tenor to rate a GIF picked without a rating.
   const CHECK_TIMEOUT_MS = 5000;
@@ -430,7 +430,7 @@
   // tab works on the same list and none writes back an old copy.
   function useFavorites(stored) {
     picker.favorites = (Array.isArray(stored) ? stored : []).filter((g) => g
-      && typeof g.id === 'string' && typeof g.title === 'string' && typeof g.preview === 'string'
+      && typeof g.id === 'string' && /^\d{1,20}$/.test(g.id) && typeof g.title === 'string' && typeof g.preview === 'string'
       && g.width > 0 && g.height > 0);
     if (!picker.open) return;
     if (picker.showingFavorites) renderFavorites(true);
@@ -648,7 +648,7 @@
     const att = attachments.get(box);
     const editor = editorOf(box);
     const submit = submitOf(box);
-    if (!att || att.posting || !editor || !submit) return;
+    if (retired || !att || att.posting || !editor || !submit) return;
 
     const nonce = newNonce();
     const marker = `[[gif:${att.gif.id}:${nonce}]]`;
@@ -657,28 +657,42 @@
     let armedAck;
     const armedPromise = new Promise((resolve) => { armedAck = resolve; });
     let seen = false;
+    let cancelled = false;
     fromMain.set(nonce, (msg) => {
       if (msg.type === 'armed') armedAck(true);
       else if (msg.type === 'refused') armedAck('refused');
       else if (msg.type === 'seen') seen = true;
-      else if (msg.type === 'retrying') setChipStatus(att, `YouTube turned it down. Trying again (${msg.attempt} of ${msg.tries})…`);
       else if (msg.type === 'result') settle(msg);
     });
 
     att.posting = true;
+    att.submitted = false;
+    att.cancel = () => {
+      cancelled = true;
+      toMain({ type: 'disarm', nonce });
+      armedAck(false);
+      const error = att.submitted
+        ? 'The comment request may already have been sent. Check the comments before trying again.'
+        : 'The GIF submission was cancelled. Nothing was posted.';
+      setChipStatus(att, error, 'error');
+      settle({ ok: false, error });
+      if (editor.isConnected) removeMarker(editor, marker);
+    };
     att.chip.toggleAttribute('data-busy', true);
     setChipStatus(att, 'Posting…');
     try {
       // A favorite or a result from Tenor's web pages may have no rating yet.
       // A GIF Tenor does not rate G is never sent. One whose rating cannot be
-      // read still is, and YouTube decides; main.js just does not retry it.
+      // read still is, and YouTube decides.
       let rating = att.gif.contentRating;
       if (rating !== 'G') {
         setChipStatus(att, 'Checking the GIF…');
         const checked = await Promise.race([
           chrome.runtime.sendMessage({ type: 'check', id: att.gif.id }).catch(() => null),
           sleep(CHECK_TIMEOUT_MS).then(() => null),
+          settled.then(() => null),
         ]);
+        if (cancelled) return;
         const found = checked && checked.ok && Array.isArray(checked.gifs) && checked.gifs.find((g) => g.id === att.gif.id);
         rating = found ? found.contentRating : null;
         if (rating && rating !== 'G') {
@@ -696,6 +710,7 @@
       // Without the page hook the marker would be posted as plain text, so
       // nothing is typed into the box until the hook has answered.
       const armed = await Promise.race([armedPromise, sleep(ARM_TIMEOUT_MS).then(() => false)]);
+      if (cancelled) return;
       if (armed !== true) {
         setChipStatus(att, armed === 'refused'
           ? 'Not ready in this tab yet. Try again in a few seconds, or refresh this page.'
@@ -709,7 +724,10 @@
       }
 
       appendMarker(editor, marker);
-      for (let i = 0; i < 20 && submit.disabled; i++) await sleep(50);
+      for (let i = 0; i < 20 && submit.disabled && !cancelled; i++) await sleep(50);
+      if (cancelled) return;
+      if (!box.isConnected || !editor.getClientRects().length) { att.cancel(); return; }
+      att.submitted = true;
       passThrough = true;
       try { submit.click(); } finally { passThrough = false; }
 
@@ -723,10 +741,15 @@
       // Failed or never sent: take the marker back out of the box.
       toMain({ type: 'disarm', nonce });
       if (editor.isConnected) removeMarker(editor, marker);
-      setChipStatus(att, (result && result.error) || 'The GIF was not sent. Nothing was posted.', 'error');
+      setChipStatus(att, (result && result.error) || (seen
+        ? 'YouTube did not confirm this GIF comment in time. Check the comments before trying again.'
+        : 'The GIF submission was not confirmed. Check the comments before trying again.'), 'error');
     } finally {
+      toMain({ type: 'disarm', nonce });
+      if (editor.isConnected) removeMarker(editor, marker);
       fromMain.delete(nonce);
       att.posting = false;
+      att.cancel = null;
       att.chip.toggleAttribute('data-busy', false);
       if (retired) {
         release(box);
@@ -752,7 +775,8 @@
       e.preventDefault();
       e.stopImmediatePropagation();
       post(box);
-    } else if (cancel && path.includes(cancel) && !attachments.get(box).posting) {
+    } else if (cancel && path.includes(cancel)) {
+      if (attachments.get(box).posting) attachments.get(box).cancel();
       detach(box, false);
     }
   }, { capture: true, signal });
@@ -808,7 +832,10 @@
   window.addEventListener('resize', queuePlace, { passive: true, signal });
   window.addEventListener('yt-navigate-start', () => {
     closePicker();
-    for (const [box, att] of attachments) if (!att.posting) detach(box, false);
+    for (const [box, att] of attachments) {
+      if (!att.posting) detach(box, false);
+      else if (!att.submitted) att.cancel();
+    }
   }, { signal });
 
   // ---------------------------------------------------------------- handover
@@ -827,7 +854,10 @@
     scanner.disconnect();
     try { chrome.storage.onChanged.removeListener(onStorage); } catch (e) { /* this copy's extension is gone */ }
     closePicker();
-    for (const [box, att] of attachments) if (!att.posting) release(box);
+    for (const [box, att] of attachments) {
+      if (!att.posting) release(box);
+      else if (!att.submitted) att.cancel();
+    }
   }
 
   document.addEventListener(TAKEOVER, retire, { signal });
