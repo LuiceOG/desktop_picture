@@ -48,16 +48,73 @@
 
   async function readBody(input, init) {
     const isRequest = input instanceof Request;
-    const headers = new Headers(isRequest ? input.headers : (init && init.headers) || {});
+    // fetch(Request, init) uses init's body and headers when supplied.
+    const headers = new Headers((init && init.headers) || (isRequest ? input.headers : {}));
     let buf;
-    if (isRequest) buf = await input.clone().arrayBuffer();
-    else if (init && init.body != null) buf = await new Response(init.body).arrayBuffer();
+    if (init && init.body != null) buf = await new Response(init.body).arrayBuffer();
+    else if (isRequest) buf = await input.clone().arrayBuffer();
     else return null;
     // YouTube gzips request bodies between 500 bytes and 500 kB.
     const text = headers.get('content-encoding') === 'gzip'
       ? await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
       : new TextDecoder().decode(buf);
     return { headers, text };
+  }
+
+  function textOf(value) {
+    if (typeof value === 'string') return value;
+    if (!value || typeof value !== 'object') return '';
+    if (typeof value.simpleText === 'string') return value.simpleText;
+    if (typeof value.content === 'string') return value.content;
+    if (Array.isArray(value.runs)) return value.runs.map((r) => typeof r.text === 'string' ? r.text : '').join('');
+    return '';
+  }
+
+  function errorsIn(actions) {
+    if (!Array.isArray(actions)) return [];
+    return actions.flatMap((action) => {
+      if (!action || typeof action !== 'object') return [];
+      const error = action.showErrorAction && action.showErrorAction.errorMessage;
+      const message = textOf(error && error.messageRenderer && error.messageRenderer.text) || textOf(error);
+      return [message, ...errorsIn(action.commandExecutorCommand && action.commandExecutorCommand.commands)];
+    }).filter(Boolean);
+  }
+
+  function reportResponse(response, json, nonce, url) {
+    const action = json && json.actionResult;
+    const serverErrors = json ? [
+      textOf(json.error && json.error.message),
+      ...errorsIn(json.actions),
+      ...errorsIn(json.onResponseReceivedActions),
+      ...errorsIn(json.onResponseReceivedEndpoints),
+    ].filter(Boolean) : [];
+    const ok = response.ok && action && action.status === 'STATUS_SUCCEEDED' && !serverErrors.length;
+    if (ok) { toContent({ type: 'result', nonce, ok: true, error: null }); return; }
+
+    // INVALID_ARGUMENT and a missing actionResult do not identify a rating
+    // problem. They also occur when YouTube restricts GIF posting or rejects
+    // another part of the request. Keep its actual explanation visible.
+    const message = [...new Set([...serverErrors, textOf(action && action.feedbackText)].filter(Boolean))].join(' ');
+    const apiStatus = json && json.error && json.error.status;
+    const detail = `HTTP ${response.status}${typeof apiStatus === 'string' ? `, ${apiStatus}` : ''}`;
+    const rejected = (response.status >= 400 && response.status < 500)
+      || serverErrors.length || (action && action.status === 'STATUS_FAILED');
+    const error = rejected
+      ? `YouTube rejected this GIF comment (${detail}).${message ? ` ${message}` : ''} Nothing was posted.`
+      : `YouTube did not confirm this GIF comment (${detail}).${message ? ` ${message}` : ''} Check the comments before trying again.`;
+
+    // Deliberately omit the request, headers, account data and response body.
+    // These few fields let a bug report distinguish a rejection from an
+    // unreadable response without exposing the user's comment or credentials.
+    console.warn('Desktop GIFs: comment not confirmed', {
+      endpoint: CREATE_URL.test(url) && /create_comment_reply(\?|$)/.test(url) ? 'create_comment_reply' : 'create_comment',
+      httpStatus: response.status,
+      apiStatus: typeof apiStatus === 'string' ? apiStatus : null,
+      actionStatus: action && typeof action.status === 'string' ? action.status : null,
+      responseReadable: json !== null,
+      message,
+    });
+    toContent({ type: 'result', nonce, ok: false, error });
   }
 
   const originalFetch = window.fetch;
@@ -111,32 +168,16 @@
       headers.delete('content-encoding');
       const payload = JSON.stringify(body);
       response = input instanceof Request
-        ? await originalFetch.call(this, new Request(input, { body: payload, headers }))
+        ? await originalFetch.call(this, new Request(input, { ...init, body: payload, headers }))
         : await originalFetch.call(this, input, { ...init, body: payload, headers });
     } catch (e) {
       toContent({ type: 'result', nonce, ok: false, error: 'The request could not be sent. Nothing was posted.' });
       throw e;
     }
 
-    try {
-      const json = await response.clone().json();
-      const ok = response.ok && !!json.actionResult && json.actionResult.status === 'STATUS_SUCCEEDED';
-      const feedback = json.actionResult && json.actionResult.feedbackText && json.actionResult.feedbackText.runs
-        ? json.actionResult.feedbackText.runs.map((r) => r.text).join('')
-        : '';
-      // YouTube only takes GIFs that Tenor rates G. For any other GIF a reply
-      // gets HTTP 400 INVALID_ARGUMENT, and a comment gets HTTP 200 with a
-      // showErrorAction where the actionResult would be. The page's own request
-      // was valid before the GIF was added, so both of these mean the GIF.
-      const refused = response.ok ? !json.actionResult : !!json.error && json.error.status === 'INVALID_ARGUMENT';
-      const fallback = response.ok ? 'YouTube did not accept this GIF comment. Nothing was posted.' : `YouTube returned HTTP ${response.status}.`;
-      const error = ok ? null
-        : refused ? 'YouTube does not accept this GIF. Try a different one. Nothing was posted.'
-        : (json.error && json.error.message) || feedback || fallback;
-      toContent({ type: 'result', nonce, ok, error });
-    } catch (e) {
-      toContent({ type: 'result', nonce, ok: response.ok, error: response.ok ? null : `YouTube returned HTTP ${response.status}.` });
-    }
+    let json = null;
+    try { json = await response.clone().json(); } catch (e) { /* an unreadable response does not confirm a post */ }
+    reportResponse(response, json, nonce, url);
     return response;
   }
 })();

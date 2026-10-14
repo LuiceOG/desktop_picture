@@ -107,14 +107,18 @@ To keep a GIF, point at it and click the star in its corner. The **★** button 
 | "Not ready in this tab yet" | The tab was open before the install and the extension is still checking that it can post from it. Try again in a few seconds, or refresh the tab. |
 | "The page hook is not running" or "The extension was reloaded" | Refresh the YouTube tab. |
 | "The GIF was not sent" | YouTube did not send the comment. Press its Comment button again. |
-| The post fails | Nothing is published, and your text and the GIF stay in the box. Try again. |
-| "YouTube does not accept this GIF" | YouTube only takes GIFs that Tenor rates G, its rating for all audiences. The picker leaves the others out, but one can get through when Tenor's ratings cannot be read. Pick a different GIF. |
+| The post fails | Your text and the GIF stay in the box. Read the error before trying again. If the result is uncertain, check the comments first to avoid posting twice. |
+| "YouTube rejected this GIF comment" | Read YouTube's explanation shown after the HTTP status. A rejection can concern the GIF, your account, the video or the request format. If every GIF fails, changing GIFs may not help. |
+| "YouTube did not confirm this GIF comment" | YouTube's response did not confirm success. Check the comments before trying again; an unreadable response does not prove that nothing was posted. |
+| "YouTube does not accept this GIF" in 0.1.4 or earlier | Those versions replaced several different YouTube errors with this message. Update to see YouTube's actual explanation; the message alone does not establish a GIF rating problem. |
 | "YouTube only takes GIFs that Tenor rates G" | The link you pasted points at a GIF with another rating. Pick a different GIF. |
 | "YouTube did not accept this GIF comment" | YouTube turned the comment down without giving a reason. Try another GIF or another video. |
 | Search finds nothing in Firefox | Open `about:addons`, select Desktop GIFs, and check under **Permissions** that access to `tenor.com` is on. |
 | "Manifest file is missing or unreadable" | The wrong folder was chosen. Choose the folder that has `manifest.json` directly inside it. |
 | Chrome, Edge or Brave lists the error `'background.scripts' requires manifest version of 2 or lower` | The extension is installed and works. The message appears when the `extension` folder is loaded from the source; that key is there for Firefox. `desktop-gifs-chromium.zip` does not have it. |
 | Clicking **GIF** does nothing in Firefox | Update to 0.1.1 or newer. |
+
+If posting still fails, open the browser's developer tools and find **Desktop GIFs: comment not confirmed** in the YouTube tab's Console. The diagnostic includes the endpoint name, HTTP status, API/action status and server explanation. Share those fields in a bug report, without request headers, cookies or a full network capture. Version 0.1.5 improves error reporting and request handling; it does not establish or bypass a YouTube restriction on GIF comments.
 
 ## Limits
 
@@ -136,6 +140,8 @@ When you pick a GIF, the content script attaches it to the comment box. When you
 | `src/sw.js` | Service worker (background script in Firefox) | Fetches G-rated search results from Tenor; on install, adds the two scripts above to YouTube tabs that are already open |
 
 There is no build step and there are no dependencies: the `extension` folder is the extension. `python3 tools/package.py` writes the two release ZIPs, which are that folder with the other browser's background key taken out of the manifest.
+
+Run `node --test tests/main.test.cjs` with Node.js 22 or newer to check the request hook against simulated YouTube responses. These tests do not publish comments or verify that a signed-in YouTube account can post a GIF.
 
 ## Privacy
 
