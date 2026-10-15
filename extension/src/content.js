@@ -56,9 +56,12 @@
     input::placeholder { color: var(--muted); }
     .fav-tab {
       flex: none; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%;
-      background: var(--field); color: var(--muted); font: 16px/1 Arial, sans-serif; cursor: pointer;
+      background: none; color: var(--muted); font: 16px/1 Arial, sans-serif; cursor: pointer; font-size: 23px;
     }
-    .fav-tab[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+    .fav-tab:hover {
+      background: rgba(241, 241, 241, 0.8); color: rgba(241, 241, 241, 0.8);
+    }
+    .fav-tab[aria-pressed="true"] { background: var(--accent); color: rgba(241, 241, 241, 0.8); }
     .fav-tab:focus-visible, .star:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .update {
       flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px;
