@@ -44,7 +44,7 @@ function hook(reply = { actionResult: { status: 'STATUS_SUCCEEDED' } }, status =
   if (!preload) load();
   return {
     window, response, responses, requests, messages, warnings, listeners, document, load,
-    arm: (rated = false) => onMessage({ source: window, origin, data: { gcfy: 'to-main', type: 'arm', id, nonce, ratedG: rated } }),
+    arm: (rated = false, retry) => onMessage({ source: window, origin, data: { gcfy: 'to-main', type: 'arm', id, nonce, ratedG: rated, retry } }),
     result: () => messages.findLast((message) => message.type === 'result'),
     send: (text = `hello ${marker}`, url = create) => window.fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -117,6 +117,39 @@ test('INVALID_ARGUMENT for a G-rated GIF is retried, then blamed on YouTube, not
   assert.match(h.result().error, /refusing GIF comments sent from desktop \(tried 12 times\)\. The GIF is not the cause/);
   assert.doesNotMatch(h.result().error, /different one/);
   assert.equal(JSON.parse(h.warnings[0][1]).tries, 12);
+  assert.equal(h.result().blocked, true);
+});
+
+test('a G-rated GIF armed without retries is sent once and still reported as blocked', async () => {
+  const h = hook(invalid, 400, success);
+  h.arm(true, false);
+  const returned = await h.send();
+  assert.equal(h.requests.length, 1);
+  assert.equal(returned.status, 400);
+  assert.equal(h.messages.filter((m) => m.type === 'retrying').length, 0);
+  assert.equal(h.result().ok, false);
+  assert.equal(h.result().blocked, true);
+  assert.match(h.result().error, /refusing GIF comments sent from desktop \(tried once\)\. The GIF is not the cause/);
+  assert.equal(JSON.parse(h.warnings[0][1]).tries, 1);
+});
+
+test('a GIF armed without retries that goes through is posted and not reported as blocked', async () => {
+  const h = hook(success);
+  h.arm(true, false);
+  await h.send();
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.result().ok, true);
+  assert.equal(h.result().blocked, false);
+});
+
+test('only a blocked G-rated GIF is reported as blocked', async () => {
+  for (const [reply, status, rated] of [[invalid, 400, false], [{ error: { status: 'PERMISSION_DENIED' } }, 403, true], [{ actions: [{ showErrorAction: {} }] }, 200, true]]) {
+    const h = hook(reply, status);
+    h.arm(rated);
+    await h.send();
+    assert.equal(h.result().ok, false);
+    assert.equal(h.result().blocked, false);
+  }
 });
 
 test('a G-rated GIF blocked once and then accepted is posted on the second try', async () => {

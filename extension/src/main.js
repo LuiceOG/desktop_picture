@@ -45,10 +45,12 @@
   // still validated, and no other request field carries a GIF. People report
   // that it depends on where they connect from, so a blocked one still gets
   // up to twelve tries in about half a minute. A blocked request posts
-  // nothing, so trying again cannot post twice.
+  // nothing, so trying again cannot post twice. Once that has failed, the
+  // content script arms later GIFs with retry: false for a while, and each of
+  // them gets one try: half a minute of retries no longer buys anything.
   const RETRY_DELAYS_MS = [1000, 1500, 2000, 2000, 2500, 2500, 3000, 3000, 3000, 3000, 3000];
 
-  // nonce -> { id, ratedG, expires }
+  // nonce -> { id, ratedG, retry, expires }
   const armed = new Map();
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,7 +62,8 @@
     if (!msg || msg.gcfy !== 'to-main') return;
     if (msg.type === 'arm' && /^\d{1,20}$/.test(msg.id) && /^[a-z0-9]{8,32}$/.test(msg.nonce)) {
       if (!hook.live) { toContent({ type: 'refused', nonce: msg.nonce }); return; }
-      armed.set(msg.nonce, { id: msg.id, ratedG: msg.ratedG === true, expires: Date.now() + ARM_TTL_MS });
+      // Copies of content.js from 0.1.8 and older do not send retry.
+      armed.set(msg.nonce, { id: msg.id, ratedG: msg.ratedG === true, retry: msg.retry !== false, expires: Date.now() + ARM_TTL_MS });
       toContent({ type: 'armed', nonce: msg.nonce });
     } else if (msg.type === 'disarm') {
       armed.delete(msg.nonce);
@@ -160,7 +163,7 @@
       verdict = await judge(response);
       // A reply with a GIF that is not rated G is blocked the same way, and
       // every time, so only a G one is worth another try.
-      if (verdict.kind !== 'blocked' || !entry.ratedG || attempt === tries) break;
+      if (verdict.kind !== 'blocked' || !entry.ratedG || !entry.retry || attempt === tries) break;
       toContent({ type: 'retrying', nonce, attempt: attempt + 1, tries });
       await sleep(RETRY_DELAYS_MS[attempt - 1]);
     }
@@ -172,7 +175,7 @@
         ? `YouTube turned this GIF comment down:${said} Nothing was posted.`
         : 'YouTube does not accept this GIF. Try a different one. Nothing was posted.')
       : verdict.kind === 'blocked' ? (entry.ratedG
-        ? `YouTube is refusing GIF comments sent from desktop (tried ${tries} times). The GIF is not the cause, so another one will not help. This changed on YouTube's side; the YouTube phone app may still post GIFs. Nothing was posted.`
+        ? `YouTube is refusing GIF comments sent from desktop (tried ${attempt === 1 ? 'once' : `${attempt} times`}). The GIF is not the cause, so another one will not help. This changed on YouTube's side; the YouTube phone app may still post GIFs. Nothing was posted.`
         : 'YouTube turned this GIF comment down. Either Tenor does not rate the GIF G, or YouTube is refusing GIF comments sent from desktop. Nothing was posted.')
       : verdict.kind === 'rejected' ? `YouTube rejected this GIF comment (${detail}).${said} Nothing was posted.`
       : `YouTube did not confirm this GIF comment (${detail}).${said} Check the comments before trying again.`;
@@ -194,7 +197,8 @@
         message: verdict.message,
       }));
     }
-    toContent({ type: 'result', nonce, ok: verdict.kind === 'posted', error });
+    // blocked tells the content script to stop retrying for a while.
+    toContent({ type: 'result', nonce, ok: verdict.kind === 'posted', blocked: verdict.kind === 'blocked' && entry.ratedG, error });
     return response;
   }
 
