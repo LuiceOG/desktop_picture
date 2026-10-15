@@ -30,6 +30,10 @@
   // How long a post waits for Tenor to rate a GIF picked without a rating.
   const CHECK_TIMEOUT_MS = 5000;
   const NO_FAVORITES = 'No favorites yet. Point at a GIF and click its star.';
+  // After YouTube has refused a G-rated GIF on every retry, later posts get one
+  // try each and the picker says so, for this long or until a GIF goes through.
+  const BLOCKED_MEMORY_MS = 24 * 60 * 60 * 1000;
+  const BLOCKED_ISSUE = 'https://github.com/rayytor/desktop_gifs/issues/93';
 
   const PICKER_CSS = `
     :host { all: initial; position: fixed; z-index: 2147483647; }
@@ -74,6 +78,11 @@
     }
     .update button:hover { background: var(--field); }
     .update a:focus-visible, .update button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .blocked { flex: none; padding: 6px 12px; border-bottom: 1px solid var(--line); color: var(--err); }
+    .blocked[hidden] { display: none; }
+    .blocked a { color: var(--accent); text-decoration: none; }
+    .blocked a:hover { text-decoration: underline; }
+    .blocked a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .status { flex: none; padding: 6px 12px 0; color: var(--muted); }
     .status:empty { display: none; }
     .status[data-kind="error"] { color: var(--err); }
@@ -176,7 +185,7 @@
 
   // ------------------------------------------------------------------ picker
 
-  const picker = { open: false, host: null, anchor: null, box: null, els: null, seq: 0, timer: 0, gifs: [], nonce: null, favorites: [], showingFavorites: false, updateAsked: false };
+  const picker = { open: false, host: null, anchor: null, box: null, els: null, seq: 0, timer: 0, gifs: [], nonce: null, favorites: [], showingFavorites: false, updateAsked: false, blockedAt: 0 };
 
   function buildPicker() {
     const host = document.createElement('div');
@@ -234,6 +243,16 @@
     updateClose.setAttribute('aria-label', 'Hide until the next version');
     update.append(updateText, updateLink, updateClose);
 
+    const blocked = document.createElement('div');
+    blocked.className = 'blocked';
+    blocked.hidden = true;
+    const blockedLink = document.createElement('a');
+    blockedLink.href = BLOCKED_ISSUE;
+    blockedLink.target = '_blank';
+    blockedLink.rel = 'noopener noreferrer';
+    blockedLink.textContent = '#93';
+    blocked.append('YouTube refused your last GIF comment from desktop, so posting will likely fail. Each GIF now gets one try. See ', blockedLink, '.');
+
     const status = document.createElement('div');
     status.className = 'status';
     status.setAttribute('role', 'status');
@@ -241,7 +260,7 @@
     const grid = document.createElement('div');
     grid.className = 'grid';
 
-    panel.append(search, update, status, grid);
+    panel.append(search, update, blocked, status, grid);
     root.append(style, panel);
 
     input.addEventListener('input', () => {
@@ -270,7 +289,7 @@
     });
 
     picker.host = host;
-    picker.els = { panel, input, status, grid, favTab, update, updateText, updateLink };
+    picker.els = { panel, input, status, grid, favTab, update, updateText, updateLink, blocked };
   }
 
   // A ZIP-installed extension does not update itself, so the picker says when
@@ -293,6 +312,12 @@
     updateText.textContent = `Desktop GIFs ${release.version} is out.`;
     updateLink.href = release.url;
     update.hidden = false;
+  }
+
+  const recentlyBlocked = () => Date.now() - picker.blockedAt < BLOCKED_MEMORY_MS;
+
+  function showBlocked() {
+    if (picker.els) picker.els.blocked.hidden = !recentlyBlocked();
   }
 
   function setStatus(text, kind) {
@@ -325,6 +350,7 @@
     box.append(picker.host);
     picker.host.showPopover();
     place();
+    showBlocked();
     picker.els.input.focus();
     load(picker.els.input.value);
     showUpdate();
@@ -437,9 +463,16 @@
     else for (const star of picker.els.grid.querySelectorAll('.star')) setStar(star, picker.gifs[Number(star.dataset.index)]);
   }
 
+  function useBlocked(stored) {
+    picker.blockedAt = typeof stored === 'number' ? stored : 0;
+    showBlocked();
+  }
+
   chrome.storage.local.get('favorites').then((items) => useFavorites(items.favorites));
+  chrome.storage.local.get('blockedAt').then((items) => useBlocked(items.blockedAt)).catch(() => {});
   const onStorage = (changes, area) => {
     if (area === 'local' && changes.favorites) useFavorites(changes.favorites.newValue);
+    if (area === 'local' && changes.blockedAt) useBlocked(changes.blockedAt.newValue);
   };
   chrome.storage.onChanged.addListener(onStorage);
 
@@ -692,7 +725,7 @@
         }
         setChipStatus(att, 'Posting…');
       }
-      toMain({ type: 'arm', id: att.gif.id, ratedG: rating === 'G', nonce });
+      toMain({ type: 'arm', id: att.gif.id, ratedG: rating === 'G', retry: !recentlyBlocked(), nonce });
       // Without the page hook the marker would be posted as plain text, so
       // nothing is typed into the box until the hook has answered.
       const armed = await Promise.race([armedPromise, sleep(ARM_TIMEOUT_MS).then(() => false)]);
@@ -716,6 +749,9 @@
       let result = await Promise.race([settled, sleep(SUBMIT_GRACE_MS).then(() => null)]);
       if (!result && seen) result = await Promise.race([settled, sleep(RESULT_TIMEOUT_MS).then(() => null)]);
 
+      // Shared with every tab through storage; see BLOCKED_MEMORY_MS.
+      if (result && result.ok && picker.blockedAt) chrome.storage.local.remove('blockedAt').catch(() => {});
+      else if (result && result.blocked) chrome.storage.local.set({ blockedAt: Date.now() }).catch(() => {});
       if (result && result.ok) {
         detach(box, false);
         return;

@@ -298,6 +298,32 @@ class PickerTests(unittest.TestCase):
         self.assertFalse(submit.is_enabled())
         self.assertEqual(self.page.evaluate('stats.posts'), [])
 
+    def test_a_blocked_gif_turns_off_retries_and_shows_a_notice_until_one_goes_through(self):
+        notice = self.page.locator('.blocked')
+        submit = self.page.locator('#modal-box #submit-button button')
+        self.open_picker()
+        self.assertFalse(notice.is_visible())
+        self.page.locator('.tile').first.click()
+        self.page.evaluate("window.postBlocked = true; window.postFailure = 'YouTube is refusing GIF comments sent from desktop.'")
+        submit.click()
+        self.page.wait_for_function("document.querySelector('.gcfy-attachment-status').textContent.includes('refusing')")
+        self.assertEqual(self.page.evaluate('stats.arms[0].retry'), True)
+        self.assertIsInstance(self.page.evaluate('storedItems.blockedAt'), int)
+
+        self.open_picker()
+        notice.wait_for(state='visible')
+        self.assertEqual(notice.get_by_role('link', name='#93').get_attribute('href'), 'https://github.com/rayytor/desktop_gifs/issues/93')
+        self.page.keyboard.press('Escape')
+        self.page.evaluate("window.postBlocked = false; window.postFailure = undefined")
+        submit.click()
+        self.page.locator('#modal-box .gcfy-attachment').wait_for(state='detached')
+        self.assertEqual(self.page.evaluate('stats.arms[1].retry'), False)
+        self.assertIsNone(self.page.evaluate('storedItems.blockedAt ?? null'))
+
+        self.open_picker()
+        self.assertFalse(notice.is_visible())
+        self.assert_modal_open()
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
